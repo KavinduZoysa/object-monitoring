@@ -129,6 +129,76 @@ function testLogin() returns error? {
     test:assertEquals(check res4.getTextPayload(), "Invalid credentials format");
 }
 
+type ObjData record {|
+    string id; 
+    string latitude;
+    string longitude;
+    int timestamp;
+|};
+
+@test:Config {dependsOn: [testPopulateTables]}
+function testPostObjData() returns error? {
+    http:Response res1 = check testClient->post("/object-data", {
+        "id" : "00001",
+        "longitude" : "2345.45",
+        "latitude" : "3.45"
+    });
+    test:assertEquals(res1.statusCode, 200);
+
+    stream<ObjData, error?> resStream = mysqlClient->query(`SELECT * from object_monitor.object_data`);
+    check resStream.forEach(function(ObjData d) {
+        test:assertEquals(d.id, "00001");
+        test:assertEquals(d.longitude, "2345.45");
+        test:assertEquals(d.latitude, "3.45");
+        test:assertTrue(d.timestamp > 0);
+    });
+    check resStream.close();
+    _ = check deleteObj("00001");
+    res1 = check testClient->post("/object-data", {
+        "id" : "00001",
+        "longitude" : "2345.45",
+        "latitudee" : "3.45"
+    });
+    test:assertEquals(res1.statusCode, 500);
+}
+
+function deleteObj(string id) returns sql:Error? {
+    sql:ParameterizedQuery OBJ_INFO_DELETE = `DELETE FROM object_monitor.object_data WHERE id = ${id}`;
+    _ = check mysqlClient->execute(OBJ_INFO_DELETE);
+}
+
+@test:Config {dependsOn: [testPopulateTables, testPostObjData]}
+function testGetObjData() returns error? {
+    http:Response res = check testClient->post("/object-data", {
+        "id" : "001",
+        "longitude" : "2345.45",
+        "latitude" : "3.45"
+    });
+    test:assertEquals(res.statusCode, 200);
+    res = check testClient->post("/object-data", {
+        "id" : "002",
+        "longitude" : "2346.45",
+        "latitude" : "4.45"
+    });
+    test:assertEquals(res.statusCode, 200);
+    res = check testClient->post("/object-data", {
+        "id" : "002",
+        "longitude" : "2347.45",
+        "latitude" : "5.45"
+    });
+    test:assertEquals(res.statusCode, 200);
+
+    http:Response res1 = check testClient->get("/get-object-locations");
+    test:assertEquals(res1.statusCode, 200);
+
+    json[] locations = <json[]> check res1.getJsonPayload();
+    test:assertEquals(locations.length(), 3);
+    json location = locations[2];
+    test:assertEquals(check location.id, "002");
+    test:assertEquals(check location.longitude, 2347.45d);
+    test:assertEquals(check location.latitude, 5.45d);
+}
+
 @test:AfterSuite
 function afterSuiteFunc() returns sql:Error? {
     check deleteDB();

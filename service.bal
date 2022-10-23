@@ -18,4 +18,12 @@ service "/object-monitor" on new http:Listener(9090) {
     isolated resource function post login(@http:Payload json payload) returns http:Response {
         return getLoginData(payload);
     }
+
+    isolated resource function post object\-data(@http:Payload json payload) returns http:Response {
+        return setObjData(payload);
+    }
+
+    isolated resource function get get\-object\-locations() returns http:Response {
+        return getObjLocations();
+    }
 }
