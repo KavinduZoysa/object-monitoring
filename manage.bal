@@ -1,4 +1,5 @@
 import ballerina/log;
+import ballerina/sql;
 import ballerina/http;
 
 isolated function populateTables() returns http:Response {
@@ -129,7 +130,7 @@ isolated function getObjLocations() returns http:Response {
             id : data[0],
             latitude : data[1],
             longitude : data[2],
-            isRestricted : false
+            isRestricted : isRestrcited(data[1], data[2])
         });
         location = locations.next();
     }
@@ -150,4 +151,163 @@ isolated function getObjLocations() returns http:Response {
 
 isolated function getLocations(ObjLocation ol) returns [string, float, float]|error {
     return [ol.id, check float:fromString(ol.latitude), check float:fromString(ol.longitude)];
+}
+
+isolated function addRestrictedAreas(json polygon) returns http:Response {
+    [string, int, string]|error restrictedAreaData = getRestrictedAreaData(polygon);
+    http:Response resp = new;
+    if restrictedAreaData is error {
+        log:printError("Restricted area insertion error ", restrictedAreaData);
+        resp.statusCode = 500;
+        resp.setPayload("Cannot insert Restricted area");
+        return resp;
+    }
+    error? res = insertRestrictedArea(restrictedAreaData[0], restrictedAreaData[1], restrictedAreaData[2]);
+    if res is error {
+        log:printError("Restricted area insertion error ", res);
+        resp.statusCode = 500;
+        resp.setPayload("Cannot insert Restricted area");
+        return resp;        
+    }
+
+    resp.statusCode = 200;
+    return resp;
+}
+
+isolated function getRestrictedAreaData(json polygon) returns [string, int, string]|error {
+    return [check polygon.name, check polygon.numOfPoints, (check polygon.points).toString()];
+}
+
+isolated function getRestrictedAreas() returns http:Response {
+    var restrictedAreas = selectRestrictedAreas();
+
+    json[] res = [];
+    var restrictedArea = restrictedAreas.next();
+    while restrictedArea !is () {
+        if restrictedArea !is error {
+            var data = extractRestrictedAreaRawData(restrictedArea.value);
+            if data is error {
+                log:printError("Invalid restricted area", data);
+            } else {
+                res.push({
+                    id: data[0],
+                    name: data[1],
+                    numOfPoints: data[2],
+                    points: data[3]
+                });
+            }
+            restrictedArea = restrictedAreas.next();
+        }
+    }
+
+    var closeRes = restrictedAreas.close();
+    http:Response resp = new;
+    if closeRes is error {
+        log:printError("Restricted areas selecting error ", closeRes);
+        resp.statusCode = 500;
+        resp.setPayload("Restricted areas selecting error");
+        return resp;        
+    }
+
+    resp.statusCode = 200;
+    resp.setJsonPayload(res);
+    return resp;
+}
+
+isolated function extractRestrictedAreaRawData(record {|anydata...;|} data) returns [int, string, int, string]|error {
+    anydata id = data["id"];
+    anydata name = data["name"];
+    anydata numOfPoints = data["numOfPoints"];
+    anydata points = data["points"];
+    if id is int && name is string && numOfPoints is int && points is string {
+        return [id, name, numOfPoints, points];
+    }
+    return error("Invalid data");
+}
+
+isolated function deleteRestrictedArea(json area) returns http:Response {
+    json|error id = area.id;
+    http:Response resp = new;
+    if id is error {
+        log:printError("Invalid restricted area id", id);
+        resp.statusCode = 500;
+        resp.setPayload("Invalid restricted area id");
+        return resp;     
+    }
+    sql:ExecutionResult|sql:Error res = reomveRestrictedArea(<int> id);
+    if res is sql:Error {
+        log:printError("Error in removing restricted area", res);
+        resp.statusCode = 500;
+        resp.setPayload("Error in removing restricted area");
+        return resp;           
+    }
+    resp.statusCode = 200;
+    return resp;
+}
+
+isolated function isRestrcited(float latitude, float longitude) returns boolean {
+    [float, float][][]|error restrictedAreas = getAllRestrictedAreas();
+    if restrictedAreas is error {
+        return false;
+    }
+    foreach var restrictedArea in restrictedAreas {
+        if isInsidePolygon(restrictedArea, [latitude, longitude]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+isolated function isInsidePolygon([float, float][] polygon, [float, float] position) returns boolean {
+    int l = polygon.length();
+    int j = l - 1;
+    boolean inside = checkPoints(polygon[0], polygon[j], position, false);
+    foreach var i in 0..<l-1 {
+        j = i + 1;
+        inside = checkPoints(polygon[i], polygon[j], position, inside);
+    } 
+    return inside;    
+}
+
+isolated function checkPoints(float[] pointA, float[] pointB, float[] position, boolean inside) returns boolean {
+    float latA = pointA[1];
+    float lngA = pointA[0];
+
+    float latB = pointB[1];
+    float lngB = pointB[0];
+
+    float latP = position[1];
+    float lngP = position[0];
+
+    boolean intersect = ((lngA > lngP) != (lngB > lngP)) && (latP < (latA - latB) * (lngP - lngB)/(lngA - lngB) + latB);
+    if (intersect) {
+        return !inside;
+    }
+    return inside;
+}
+
+isolated function getAllRestrictedAreas() returns [float, float][][]|error {
+    [float, float][][] polygons = [];
+
+    var restrictedAreas = selectRestrictedAreas();
+    var restrictedArea = check restrictedAreas.next();
+    while restrictedArea !is () {
+        polygons.push(check getPolygon(restrictedArea.value));
+        restrictedArea = check restrictedAreas.next();
+    }
+    return polygons;
+}
+
+isolated function getPolygon(record {| anydata...; |} value) returns [float, float][]|error {
+    [float, float][] polygon = [];
+
+    anydata p = value["points"];
+    if p !is string { 
+        return error("Invalid polygon");
+    }
+    json[] points = <json[]>(check p.fromJsonFloatString());
+    foreach var point in points {
+        polygon.push([check point.lat, check point.long]);
+    }
+    return polygon;
 }

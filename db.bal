@@ -7,6 +7,7 @@ isolated function createTables() returns error? {
     check createDB();
     _ = check mysqlClient->execute(`CREATE TABLE IF NOT EXISTS object_monitor.users(id INT NOT NULL AUTO_INCREMENT, firstName VARCHAR(255), lastName VARCHAR(255), username VARCHAR(255) UNIQUE, password VARCHAR(255), isAdmin BOOLEAN, PRIMARY KEY (id));`);
     _ = check mysqlClient->execute(`CREATE TABLE IF NOT EXISTS object_monitor.object_data(id VARCHAR(255), latitude VARCHAR(255), longitude VARCHAR(255), timestamp int(15));`);
+    _ = check mysqlClient->execute(`CREATE TABLE IF NOT EXISTS object_monitor.restricted_areas(id INT(50) NOT NULL AUTO_INCREMENT, name VARCHAR(255), numOfPoints INT(50), points VARCHAR(2550), PRIMARY KEY (id));`);
 }
 
 isolated function createDB() returns sql:Error? {
@@ -18,6 +19,7 @@ isolated function insertUser(string firstName, string lastName, string username,
     _ = check mysqlClient->execute(USER_INSERTION);
 }
 
+// TODO: Refactor this to return the stream
 isolated  function getUserLoginData(string username, string password) returns LoginData|error? {
     sql:ParameterizedQuery USER_DATA_SELECTION = `SELECT firstName, lastName, id, username, isAdmin FROM object_monitor.users WHERE username = ${username} AND BINARY password = ${password}`;
     stream<LoginData, error?> resultStream = mysqlClient->query(USER_DATA_SELECTION);
@@ -39,4 +41,19 @@ isolated function selectObjLocation() returns stream<ObjLocation, error?> {
     sql:ParameterizedQuery OBJ_LOCATIONS = `SELECT * FROM object_monitor.object_data WHERE timestamp IN (SELECT MAX(timestamp) FROM object_monitor.object_data GROUP BY id)`;
     stream<ObjLocation, error?> resultStream = mysqlClient->query(OBJ_LOCATIONS);
     return resultStream;
+}
+
+isolated function insertRestrictedArea(string name, int numOfPoints, string points) returns error? {
+    sql:ParameterizedQuery RESTRICTED_AREA_INSERTION = `INSERT INTO object_monitor.restricted_areas(name, numOfPoints, points) values (${name}, ${numOfPoints}, ${points})`;
+    _ = check mysqlClient->execute(RESTRICTED_AREA_INSERTION);
+}
+
+isolated function selectRestrictedAreas() returns stream<record {|anydata...;|}, error?> {
+    sql:ParameterizedQuery SELECT_RESTRICTED_AREAS = `SELECT * FROM object_monitor.restricted_areas`;
+    return mysqlClient->query(SELECT_RESTRICTED_AREAS);
+}
+
+isolated function reomveRestrictedArea(int id) returns sql:ExecutionResult|sql:Error {
+    sql:ParameterizedQuery DELETE_RETRICTED_AREA = `DELETE FROM object_monitor.restricted_areas WHERE id = ${id}`;
+    return mysqlClient->execute(DELETE_RETRICTED_AREA);
 }

@@ -26,4 +26,16 @@ service "/object-monitor" on new http:Listener(9090) {
     isolated resource function get get\-object\-locations() returns http:Response {
         return getObjLocations();
     }
+
+    isolated resource function post restricted\-area(@http:Payload json payload) returns http:Response {
+        return addRestrictedAreas(payload);
+    }
+
+    isolated resource function get restricted\-areas() returns http:Response {
+        return getRestrictedAreas();
+    }
+
+    isolated resource function post delete\-restricted\-area(@http:Payload json payload) returns http:Response {
+        return deleteRestrictedArea(payload);
+    }
 }

@@ -199,6 +199,82 @@ function testGetObjData() returns error? {
     test:assertEquals(check location.latitude, 5.45d);
 }
 
+@test:Config {dependsOn: [testPopulateTables]}
+function testPostRestrictedArea() returns error? {
+    http:Response res = check testClient->post("/restricted-area", {
+        "name": "general-hospital", 
+        "numOfPoints": 5, 
+        "points": [{lat: 6.876678, long: 79.920579},
+                    {lat: 6.874974, long: 79.929333},
+                    {lat: 6.868156, long: 79.932423},
+                    {lat: 6.864066, long: 79.925042},
+                    {lat: 6.875996, long: 79.911824}]
+    });
+    test:assertEquals(res.statusCode, 200);
+    res = check testClient->post("/restricted-area", {
+        "name": "port-city", 
+        "numOfPoints": 6, 
+        "points": [{lat: 6.947229, long: 79.820157},
+                    {lat: 6.953875, long: 79.835606},
+                    {lat: 6.945014, long: 79.846592},
+                    {lat: 6.923543, long: 79.841271},
+                    {lat: 6.924054, long: 79.825993},
+                    {lat: 6.939561, long: 79.819470}]
+    });
+    test:assertEquals(res.statusCode, 200);    
+}
+
+@test:Config {dependsOn: [testPopulateTables, testPostRestrictedArea]}
+function testGetRestrictedAreas() returns error? {
+    http:Response res = check testClient->get("/restricted-areas");
+    test:assertEquals(res.statusCode, 200);
+
+    json[] restrictedAreas = <json[]> check res.getJsonPayload();
+    test:assertEquals(restrictedAreas.length(), 2);
+    json restrictedArea = restrictedAreas[1];
+    test:assertEquals(check restrictedArea.name, "port-city");
+    test:assertEquals(check restrictedArea.numOfPoints, 6);
+    test:assertEquals(check restrictedArea.points, "[{\"lat\":6.947229,\"long\":79.820157},{\"lat\":6.953875,\"long\":79.835606},{\"lat\":6.945014,\"long\":79.846592},{\"lat\":6.923543,\"long\":79.841271},{\"lat\":6.924054,\"long\":79.825993},{\"lat\":6.939561,\"long\":79.81947}]");
+}
+
+@test:Config {dependsOn: [testPopulateTables, testPostRestrictedArea, testGetRestrictedAreas]}
+function testRemoveRestrictedArea() returns error? {
+    http:Response res = check testClient->post("/delete-restricted-area", {
+        "id": 1
+    });
+    test:assertEquals(res.statusCode, 200);
+
+    res = check testClient->get("/restricted-areas");
+    test:assertEquals(res.statusCode, 200);
+    json[] restrictedAreas = <json[]> check res.getJsonPayload();
+    test:assertEquals(restrictedAreas.length(), 1);
+    json restrictedArea = restrictedAreas[0];
+    test:assertEquals(check restrictedArea.name, "port-city");
+    test:assertEquals(check restrictedArea.numOfPoints, 6);
+    test:assertEquals(check restrictedArea.points, "[{\"lat\":6.947229,\"long\":79.820157},{\"lat\":6.953875,\"long\":79.835606},{\"lat\":6.945014,\"long\":79.846592},{\"lat\":6.923543,\"long\":79.841271},{\"lat\":6.924054,\"long\":79.825993},{\"lat\":6.939561,\"long\":79.81947}]");
+}
+
+@test:Config {dependsOn: [testPostRestrictedArea]}
+function testRestrictedArea() returns error? {
+    http:Response res = check testClient->post("/object-data", {
+        "id" : "004",
+        "latitude" : "6.9351051",
+        "longitude" : "79.8398552"
+    });
+    test:assertEquals(res.statusCode, 200);    
+    res = check testClient->get("/get-object-locations");
+    test:assertEquals(res.statusCode, 200);
+
+    json[] locations = <json[]> check res.getJsonPayload();
+    foreach var location in locations {
+        if check location.id == "004" {
+            test:assertEquals(check location.isRestricted, true);
+            return;
+        }
+    }
+    test:assertEquals(true, false);
+}
+
 @test:AfterSuite
 function afterSuiteFunc() returns sql:Error? {
     check deleteDB();
