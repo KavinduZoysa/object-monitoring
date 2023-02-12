@@ -7,64 +7,37 @@ isolated function populateTables() returns http:Response {
     http:Response resp = new;
     if res is error {
         log:printError("Populate table error ", res);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Cannot create tables");
     } else {
-        resp.statusCode = 200;
+        resp.statusCode = http:STATUS_OK;
     }
     return resp;
 }
 
-isolated function signUp(json user) returns http:Response {
-    [string, string, string, string, boolean]|error userData = readUserInfo(user);
+isolated function signUp(User user) returns http:Response {
     http:Response resp = new;
-    if userData is error {
-        log:printError("SignUp error ", userData);
-        resp.statusCode = 500;
-        resp.setPayload("Invalid user data format"); 
-        return resp;
-    } 
-    error? res = insertUser(userData[0], userData[1], userData[2], userData[3], userData[4]);
+    error? res = insertUser(user.firstName, user.lastName, user.username, user.password, user.isAdmin);
     if res is error {
         log:printError("SignUp error ", res);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Cannot register the user");
     } else {
-        resp.statusCode = 200;
+        resp.statusCode = http:STATUS_OK;
     }
     return resp;
 }
 
-isolated function readUserInfo(json user) returns [string, string, string, string, boolean]|error {
-    return [check user.firstName, check user.lastName, check user.username, check user.password, check user.isAdmin];
-}
-
-type LoginData record {|
-    string firstName;
-    string lastName;
-    int id;
-    string username;
-    boolean isAdmin;
-|};
-
-isolated function getLoginData(json credentials) returns http:Response {
-    [string, string]|error cred = getCredentials(credentials);
+isolated function getLoginData(Credentials credentials) returns http:Response {
     http:Response resp = new;
-    if cred is error {
-        log:printError("Credential format error ", cred);
-        resp.statusCode = 500;
-        resp.setPayload("Invalid credentials format");
-        return resp;
-    }
-
-    LoginData|error? userData = getUserLoginData(cred[0], cred[1]);
+    LoginData|error? userData = getUserLoginData(credentials);
     if (userData is error?) {
         log:printError("Login error ", userData);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Invalid credentials");
     } else {
         LoginData li = <LoginData> userData;
-        resp.statusCode = 200;
+        resp.statusCode = http:STATUS_OK;
         resp.setJsonPayload({
             firstName : li.firstName,
             lastName : li.lastName,
@@ -76,40 +49,18 @@ isolated function getLoginData(json credentials) returns http:Response {
     return resp;
 }
 
-isolated function getCredentials(json credentials) returns [string, string]|error {
-    return [check credentials.username, check credentials.password];
-}
-
-isolated function setObjData(json data) returns http:Response {
-    var objData = getObjData(data);
+isolated function setObjData(Location location) returns http:Response {
     http:Response resp = new;
-    if objData is error {
-        log:printError("Object data insertion error ", objData);
-        resp.statusCode = 500;
-        resp.setPayload("Invalid object data");
-        return resp;
-    }
-    error? res = insertObjData(objData[0], objData[1], objData[2]);
+    error? res = insertObjData(location);
     if res is error {
         log:printError("Object data insertion error ", res);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Cannot insert object data");
         return resp;
     }
-    resp.statusCode = 200;
+    resp.statusCode = http:STATUS_OK;
     return resp;     
 }
-
-isolated function getObjData(json data) returns [string, string, string]|error {
-    return [check data.id, check data.latitude, check data.longitude];
-}
-
-type ObjLocation record {|
-    string id;
-    string latitude;
-    string longitude;
-    int timestamp;
-|};
 
 isolated function getObjLocations() returns http:Response {
     var locations = selectObjLocation();
@@ -125,7 +76,6 @@ isolated function getObjLocations() returns http:Response {
             log:printError("Invalid longitude/latitude", data);
             continue;                
         }
-        // TODO: Check for restricted areas
         res.push({
             id : data[0],
             latitude : data[1],
@@ -139,43 +89,31 @@ isolated function getObjLocations() returns http:Response {
     http:Response resp = new;
     if closeRes is error {
         log:printError("Object locations selecting error ", closeRes);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Object locations selecting error");
         return resp;        
     }
 
-    resp.statusCode = 200;
+    resp.statusCode = http:STATUS_OK;
     resp.setJsonPayload(res);
     return resp;
 }
 
-isolated function getLocations(ObjLocation ol) returns [string, float, float]|error {
+isolated function getLocations(LocationOnTimestamp ol) returns [string, float, float]|error {
     return [ol.id, check float:fromString(ol.latitude), check float:fromString(ol.longitude)];
 }
 
-isolated function addRestrictedAreas(json polygon) returns http:Response {
-    [string, int, string]|error restrictedAreaData = getRestrictedAreaData(polygon);
+isolated function addRestrictedAreas(RestrictedArea polygon) returns http:Response {
     http:Response resp = new;
-    if restrictedAreaData is error {
-        log:printError("Restricted area insertion error ", restrictedAreaData);
-        resp.statusCode = 500;
-        resp.setPayload("Cannot insert Restricted area");
-        return resp;
-    }
-    error? res = insertRestrictedArea(restrictedAreaData[0], restrictedAreaData[1], restrictedAreaData[2]);
+    error? res = insertRestrictedArea(polygon);
     if res is error {
         log:printError("Restricted area insertion error ", res);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Cannot insert Restricted area");
         return resp;        
     }
-
-    resp.statusCode = 200;
+    resp.statusCode = http:STATUS_OK;
     return resp;
-}
-
-isolated function getRestrictedAreaData(json polygon) returns [string, int, string]|error {
-    return [check polygon.name, check polygon.numOfPoints, (check polygon.points).toString()];
 }
 
 isolated function getRestrictedAreas() returns http:Response {
@@ -204,12 +142,11 @@ isolated function getRestrictedAreas() returns http:Response {
     http:Response resp = new;
     if closeRes is error {
         log:printError("Restricted areas selecting error ", closeRes);
-        resp.statusCode = 500;
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Restricted areas selecting error");
         return resp;        
     }
-
-    resp.statusCode = 200;
+    resp.statusCode = http:STATUS_OK;
     resp.setJsonPayload(res);
     return resp;
 }
@@ -225,16 +162,9 @@ isolated function extractRestrictedAreaRawData(record {|anydata...;|} data) retu
     return error("Invalid data");
 }
 
-isolated function deleteRestrictedArea(json area) returns http:Response {
-    json|error id = area.id;
+isolated function deleteRestrictedArea(RestrictedAreaId areaId) returns http:Response {
     http:Response resp = new;
-    if id is error {
-        log:printError("Invalid restricted area id", id);
-        resp.statusCode = 500;
-        resp.setPayload("Invalid restricted area id");
-        return resp;     
-    }
-    sql:ExecutionResult|sql:Error res = reomveRestrictedArea(<int> id);
+    sql:ExecutionResult|sql:Error res = reomveRestrictedArea(areaId.id);
     if res is sql:Error {
         log:printError("Error in removing restricted area", res);
         resp.statusCode = 500;

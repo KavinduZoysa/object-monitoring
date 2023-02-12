@@ -23,7 +23,7 @@ function testPopulateTables() returns error? {
     return ();
 }
 
-type User record {|
+type U record {|
     int id;
     string firstName;
     string lastName;
@@ -43,8 +43,8 @@ function testSignUp() returns error? {
     });
     test:assertEquals(res1.statusCode, 200);
 
-    stream<User, error?> resStream = mysqlClient->query(`SELECT * from object_monitor.users WHERE username = 'samankumara007'`);
-    check resStream.forEach(function(User user) {
+    stream<U, error?> resStream = mysqlClient->query(`SELECT * from object_monitor.users WHERE username = 'samankumara007'`);
+    check resStream.forEach(function(U user) {
         test:assertEquals(user.id, 1);
         test:assertEquals(user.firstName, "Saman");
         test:assertEquals(user.lastName, "Kumara");
@@ -65,7 +65,7 @@ function testSignUp() returns error? {
 
     resStream = mysqlClient->query(`SELECT * from object_monitor.users`);
     int i = 1;
-    check resStream.forEach(function(User user) {
+    check resStream.forEach(function(U user) {
         test:assertEquals(user.id, i);
         i = i + 1;
     });
@@ -87,8 +87,7 @@ function testSignUp() returns error? {
         Password: "1qa2ws3edRFz",
         isAdmin: false
     });
-    test:assertEquals(res3.statusCode, 500);
-    test:assertEquals(check res3.getTextPayload(), "Invalid user data format");
+    test:assertEquals(res3.statusCode, 400);
     return ();    
 }
 
@@ -125,8 +124,7 @@ function testLogin() returns error? {
         username: "samankumara007",
         Password: "1qa2ws3edRF"
     });
-    test:assertEquals(res4.statusCode, 500);
-    test:assertEquals(check res4.getTextPayload(), "Invalid credentials format");
+    test:assertEquals(res4.statusCode, 400);
 }
 
 type ObjData record {|
@@ -159,7 +157,7 @@ function testPostObjData() returns error? {
         "longitude" : "2345.45",
         "latitudee" : "3.45"
     });
-    test:assertEquals(res1.statusCode, 500);
+    test:assertEquals(res1.statusCode, 400);
 }
 
 function deleteObj(string id) returns sql:Error? {

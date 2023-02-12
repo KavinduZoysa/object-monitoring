@@ -20,8 +20,8 @@ isolated function insertUser(string firstName, string lastName, string username,
 }
 
 // TODO: Refactor this to return the stream
-isolated  function getUserLoginData(string username, string password) returns LoginData|error? {
-    sql:ParameterizedQuery USER_DATA_SELECTION = `SELECT firstName, lastName, id, username, isAdmin FROM object_monitor.users WHERE username = ${username} AND BINARY password = ${password}`;
+isolated  function getUserLoginData(Credentials credentials) returns LoginData|error? {
+    sql:ParameterizedQuery USER_DATA_SELECTION = `SELECT firstName, lastName, id, username, isAdmin FROM object_monitor.users WHERE username = ${credentials.username} AND BINARY password = ${credentials.password}`;
     stream<LoginData, error?> resultStream = mysqlClient->query(USER_DATA_SELECTION);
 
     record {|LoginData value;|}? result = check resultStream.next();
@@ -32,19 +32,19 @@ isolated  function getUserLoginData(string username, string password) returns Lo
     return result;
 }
 
-isolated function insertObjData(string id, string latitude, string longitude) returns error? {
-    sql:ParameterizedQuery OBJ_DATA_INSERTION = `INSERT INTO object_monitor.object_data(id, latitude, longitude, timestamp) values (${id}, ${latitude}, ${longitude}, UNIX_TIMESTAMP(now()))`;
+isolated function insertObjData(Location location) returns error? {
+    sql:ParameterizedQuery OBJ_DATA_INSERTION = `INSERT INTO object_monitor.object_data(id, latitude, longitude, timestamp) values (${location.id}, ${location.latitude}, ${location.longitude}, UNIX_TIMESTAMP(now()))`;
     _ = check mysqlClient->execute(OBJ_DATA_INSERTION);
 }
 
-isolated function selectObjLocation() returns stream<ObjLocation, error?> {
+isolated function selectObjLocation() returns stream<LocationOnTimestamp, error?> {
     sql:ParameterizedQuery OBJ_LOCATIONS = `SELECT * FROM object_monitor.object_data WHERE timestamp IN (SELECT MAX(timestamp) FROM object_monitor.object_data GROUP BY id)`;
-    stream<ObjLocation, error?> resultStream = mysqlClient->query(OBJ_LOCATIONS);
+    stream<LocationOnTimestamp, error?> resultStream = mysqlClient->query(OBJ_LOCATIONS);
     return resultStream;
 }
 
-isolated function insertRestrictedArea(string name, int numOfPoints, string points) returns error? {
-    sql:ParameterizedQuery RESTRICTED_AREA_INSERTION = `INSERT INTO object_monitor.restricted_areas(name, numOfPoints, points) values (${name}, ${numOfPoints}, ${points})`;
+isolated function insertRestrictedArea(RestrictedArea polygon) returns error? {
+    sql:ParameterizedQuery RESTRICTED_AREA_INSERTION = `INSERT INTO object_monitor.restricted_areas(name, numOfPoints, points) values (${polygon.name}, ${polygon.numOfPoints}, ${polygon.points.toString()})`;
     _ = check mysqlClient->execute(RESTRICTED_AREA_INSERTION);
 }
 

@@ -11,15 +11,15 @@ service "/object-monitor" on new http:Listener(9090) {
         return populateTables();
     }
 
-    isolated resource function post signup(@http:Payload json payload) returns http:Response {
+    isolated resource function post signup(@http:Payload User payload) returns http:Response {
         return signUp(payload);
     }
 
-    isolated resource function post login(@http:Payload json payload) returns http:Response {
+    isolated resource function post login(@http:Payload Credentials payload) returns http:Response {
         return getLoginData(payload);
     }
 
-    isolated resource function post object\-data(@http:Payload json payload) returns http:Response {
+    isolated resource function post object\-data(@http:Payload Location payload) returns http:Response {
         return setObjData(payload);
     }
 
@@ -27,7 +27,7 @@ service "/object-monitor" on new http:Listener(9090) {
         return getObjLocations();
     }
 
-    isolated resource function post restricted\-area(@http:Payload json payload) returns http:Response {
+    isolated resource function post restricted\-area(@http:Payload RestrictedArea payload) returns http:Response {
         return addRestrictedAreas(payload);
     }
 
@@ -35,7 +35,7 @@ service "/object-monitor" on new http:Listener(9090) {
         return getRestrictedAreas();
     }
 
-    isolated resource function post delete\-restricted\-area(@http:Payload json payload) returns http:Response {
+    isolated resource function post delete\-restricted\-area(@http:Payload RestrictedAreaId payload) returns http:Response {
         return deleteRestrictedArea(payload);
     }
 }
