@@ -1,9 +1,14 @@
 import ballerina/http;
+import ballerina/log;
 import ballerina/test;
 import ballerina/sql;
-import ballerina/log;
 
-http:Client testClient = check new ("http://localhost:9090/object-monitor");
+configurable string PROJECT_PATH = "/home/kavindu/GIT/object-monitoring/";
+
+http:Client testClient = check new ("https://localhost:9090/object-monitor",
+                                        secureSocket = {
+                                            cert: PROJECT_PATH + "resources/public.crt" 
+                                        });
 
 @test:BeforeSuite
 function beforeSuiteFunc() returns error? {

@@ -1,6 +1,15 @@
 import ballerina/http;
 
-service "/object-monitor" on new http:Listener(9090) {
+listener http:Listener securedEP = new (9090,
+    secureSocket = {
+        key: {
+            certFile: "./resources/public.crt",
+            keyFile: "./resources/private.key"
+        }
+    }
+);
+
+service "/object-monitor" on securedEP {
     
     resource function get health\-check() returns http:Response {
         http:Response resp = new;

@@ -10,6 +10,10 @@ isolated function createTables() returns error? {
     _ = check mysqlClient->execute(`CREATE TABLE IF NOT EXISTS object_monitor.restricted_areas(id INT(50) NOT NULL AUTO_INCREMENT, name VARCHAR(255), numOfPoints INT(50), points VARCHAR(2550), PRIMARY KEY (id));`);
 }
 
+isolated function deleteDatabase() returns error? {
+    _ = check mysqlClient->execute(`DROP DATABASE object_monitor`);
+}
+
 isolated function createDB() returns sql:Error? {
     _ = check mysqlClient->execute(`CREATE DATABASE IF NOT EXISTS object_monitor`);
 }

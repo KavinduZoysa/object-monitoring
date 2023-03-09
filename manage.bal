@@ -15,6 +15,19 @@ isolated function populateTables() returns http:Response {
     return resp;
 }
 
+isolated function removeTables() returns http:Response {
+    error? res = deleteDatabase();
+    http:Response resp = new;
+    if res is error {
+        log:printError("Delete tables error ", res);
+        resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
+        resp.setPayload("Cannot delete tables");
+    } else {
+        resp.statusCode = http:STATUS_OK;
+    }
+    return resp;
+}
+
 isolated function signUp(User user) returns http:Response {
     http:Response resp = new;
     error? res = insertUser(user.firstName, user.lastName, user.username, user.password, user.isAdmin);
