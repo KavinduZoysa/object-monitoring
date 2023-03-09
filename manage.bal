@@ -1,6 +1,7 @@
 import ballerina/log;
 import ballerina/sql;
 import ballerina/http;
+import ballerina/jwt;
 
 isolated function populateTables() returns http:Response {
     error? res = createTables();
@@ -30,7 +31,7 @@ isolated function removeTables() returns http:Response {
 
 isolated function signUp(User user) returns http:Response {
     http:Response resp = new;
-    error? res = insertUser(user.firstName, user.lastName, user.username, user.password, user.isAdmin);
+    error? res = insertUser(user.firstName, user.lastName, user.username, user.password);
     if res is error {
         log:printError("SignUp error ", res);
         resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
@@ -43,23 +44,44 @@ isolated function signUp(User user) returns http:Response {
 
 isolated function getLoginData(Credentials credentials) returns http:Response {
     http:Response resp = new;
-    LoginData|error? userData = getUserLoginData(credentials);
-    if (userData is error?) {
-        log:printError("Login error ", userData);
+    LoginData|error? user = getUserLoginData(credentials);
+    if (user is error?) {
+        log:printError("Login error ", user);
         resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
         resp.setPayload("Invalid credentials");
     } else {
-        LoginData li = <LoginData> userData;
-        resp.statusCode = http:STATUS_OK;
-        resp.setJsonPayload({
-            firstName : li.firstName,
-            lastName : li.lastName,
-            userID : li.id,
-            username : li.username,
-            isAdmin : li.isAdmin
-        });
+        string|error jwt = generateJwt(user.isAdmin);
+        if jwt is error {
+            log:printError("JWT generation error ", jwt);
+            resp.statusCode = http:STATUS_INTERNAL_SERVER_ERROR;
+            resp.setPayload("Cannot generate JWT");
+        } else {
+            resp.statusCode = http:STATUS_OK;
+            resp.setJsonPayload({
+                username : user.username,
+                jwt : jwt
+            });
+        }
     }
     return resp;
+}
+
+isolated function generateJwt(boolean isAdmin) returns string|error {
+    jwt:IssuerConfig config = {
+        username: "ballerina",
+        issuer: "wso2",
+        audience: ["ballerina", "ballerina.org", "ballerina.io"],
+        keyId: "5a0b754-895f-4279-8843-b745e11a57e9",
+        jwtId: "JlbmMiOiJBMTI4Q0JDLUhTMjU2In",
+        customClaims: {"scp": isAdmin ? "admin" : "user"},
+        expTime: 3600,
+        signatureConfig: {
+            config: {
+                keyFile: "./resources/private.key"
+            }
+        }
+    };
+    return jwt:issue(config);
 }
 
 isolated function setObjData(Location location) returns http:Response {

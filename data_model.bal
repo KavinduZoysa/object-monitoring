@@ -1,18 +1,17 @@
 type CommonUserData record {|
-    string firstName; 
-    string lastName;
     string username;
-    boolean isAdmin;
 |};
 
 type User record {|
     *CommonUserData;
+    string firstName; 
+    string lastName;
     string password;
 |};
 
 type LoginData record {|
     *CommonUserData;
-    int id;
+    boolean isAdmin;
 |};
 
 type Credentials record {|

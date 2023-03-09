@@ -18,14 +18,14 @@ isolated function createDB() returns sql:Error? {
     _ = check mysqlClient->execute(`CREATE DATABASE IF NOT EXISTS object_monitor`);
 }
 
-isolated function insertUser(string firstName, string lastName, string username, string password, boolean isAdmin) returns error? {
-    sql:ParameterizedQuery USER_INSERTION = `INSERT INTO object_monitor.users(firstName, lastName, username, password, isAdmin) values (${firstName}, ${lastName}, ${username}, ${password}, ${isAdmin})`;
+isolated function insertUser(string firstName, string lastName, string username, string password) returns error? {
+    sql:ParameterizedQuery USER_INSERTION = `INSERT INTO object_monitor.users(firstName, lastName, username, password, isAdmin) values (${firstName}, ${lastName}, ${username}, ${password}, false)`;
     _ = check mysqlClient->execute(USER_INSERTION);
 }
 
 // TODO: Refactor this to return the stream
 isolated  function getUserLoginData(Credentials credentials) returns LoginData|error? {
-    sql:ParameterizedQuery USER_DATA_SELECTION = `SELECT firstName, lastName, id, username, isAdmin FROM object_monitor.users WHERE username = ${credentials.username} AND BINARY password = ${credentials.password}`;
+    sql:ParameterizedQuery USER_DATA_SELECTION = `SELECT username, isAdmin FROM object_monitor.users WHERE username = ${credentials.username} AND BINARY password = ${credentials.password}`;
     stream<LoginData, error?> resultStream = mysqlClient->query(USER_DATA_SELECTION);
 
     record {|LoginData value;|}? result = check resultStream.next();

@@ -3,12 +3,12 @@ import ballerina/log;
 import ballerina/test;
 import ballerina/sql;
 
-configurable string PROJECT_PATH = "/home/kavindu/GIT/object-monitoring/";
-
 http:Client testClient = check new ("https://localhost:9090/object-monitor",
                                         secureSocket = {
-                                            cert: PROJECT_PATH + "resources/public.crt" 
+                                            cert: "./resources/public.crt" 
                                         });
+
+string adminJwt = check generateJwt(true);
 
 @test:BeforeSuite
 function beforeSuiteFunc() returns error? {
@@ -23,7 +23,7 @@ function testHealthCheck() returns error? {
 
 @test:Config {}
 function testPopulateTables() returns error? {
-    http:Response res = check testClient->get("/populate-tables");
+    http:Response res = check testClient->get("/populate-tables", {"Authorization": "Bearer " + adminJwt});
     test:assertEquals(res.statusCode, 200);
     return ();
 }
@@ -43,8 +43,7 @@ function testSignUp() returns error? {
         firstName: "Saman",
         lastName: "Kumara",
         username: "samankumara007",
-        password: "1qa2ws3edRF",
-        isAdmin: false
+        password: "1qa2ws3edRF"
     });
     test:assertEquals(res1.statusCode, 200);
 
@@ -63,8 +62,7 @@ function testSignUp() returns error? {
         firstName: "Saman",
         lastName: "Kumara",
         username: "samankumara008",
-        password: "1qa2ws3edRF",
-        isAdmin: false
+        password: "1qa2ws3edRF"
     });
     test:assertEquals(res1.statusCode, 200);
 
@@ -79,8 +77,7 @@ function testSignUp() returns error? {
         firstName: "Saman",
         lastName: "Kumara",
         username: "samankumara007",
-        password: "1qa2ws3edRF",
-        isAdmin: false
+        password: "1qa2ws3edRF"
     });
     test:assertEquals(res2.statusCode, 500);
     test:assertEquals(check res2.getTextPayload(), "Cannot register the user");
@@ -89,11 +86,9 @@ function testSignUp() returns error? {
         firstName: "Samanx",
         lastName: "Kumaray",
         username: "samankumara007",
-        Password: "1qa2ws3edRFz",
-        isAdmin: false
+        Password: "1qa2ws3edRFz"
     });
     test:assertEquals(res3.statusCode, 400);
-    return ();    
 }
 
 @test:Config {dependsOn: [testSignUp]}
@@ -103,13 +98,6 @@ function testLogin() returns error? {
         password: "1qa2ws3edRF"
     });
     test:assertEquals(res1.statusCode, 200);
-    test:assertEquals(check res1.getJsonPayload(), {
-        firstName : "Saman",
-        lastName : "Kumara",
-        userID : 1,
-        username : "samankumara007",
-        isAdmin : false
-    });
 
     http:Response res2 = check testClient->post("/login", {
         username: "samankumara007",
@@ -139,13 +127,15 @@ type ObjData record {|
     int timestamp;
 |};
 
-@test:Config {dependsOn: [testPopulateTables]}
+@test:Config {dependsOn: [testSignUp]}
 function testPostObjData() returns error? {
+    string jwt = check getUserJwt();
+
     http:Response res1 = check testClient->post("/object-data", {
         "id" : "00001",
         "longitude" : "2345.45",
         "latitude" : "3.45"
-    });
+    }, {"Authorization": "Bearer " + jwt});
     test:assertEquals(res1.statusCode, 200);
 
     stream<ObjData, error?> resStream = mysqlClient->query(`SELECT * from object_monitor.object_data`);
@@ -157,6 +147,14 @@ function testPostObjData() returns error? {
     });
     check resStream.close();
     _ = check deleteObj("00001");
+
+    res1 = check testClient->post("/object-data", {
+        "id" : "00002",
+        "longitude" : "2345.45",
+        "latitude" : "3.45"
+    });
+    test:assertEquals(res1.statusCode, 401);
+
     res1 = check testClient->post("/object-data", {
         "id" : "00001",
         "longitude" : "2345.45",
@@ -170,28 +168,31 @@ function deleteObj(string id) returns sql:Error? {
     _ = check mysqlClient->execute(OBJ_INFO_DELETE);
 }
 
-@test:Config {dependsOn: [testPopulateTables, testPostObjData]}
+@test:Config {dependsOn: [testPostObjData]}
 function testGetObjData() returns error? {
+    string jwt = check getUserJwt();
+
     http:Response res = check testClient->post("/object-data", {
         "id" : "001",
         "longitude" : "2345.45",
         "latitude" : "3.45"
-    });
+    }, {"Authorization": "Bearer " + jwt});
     test:assertEquals(res.statusCode, 200);
+
     res = check testClient->post("/object-data", {
         "id" : "002",
         "longitude" : "2346.45",
         "latitude" : "4.45"
-    });
+    }, {"Authorization": "Bearer " + jwt});
     test:assertEquals(res.statusCode, 200);
     res = check testClient->post("/object-data", {
         "id" : "002",
         "longitude" : "2347.45",
         "latitude" : "5.45"
-    });
+    }, {"Authorization": "Bearer " + jwt});
     test:assertEquals(res.statusCode, 200);
 
-    http:Response res1 = check testClient->get("/get-object-locations");
+    http:Response res1 = check testClient->get("/get-object-locations", {"Authorization": "Bearer " + jwt});
     test:assertEquals(res1.statusCode, 200);
 
     json[] locations = <json[]> check res1.getJsonPayload();
@@ -202,8 +203,10 @@ function testGetObjData() returns error? {
     test:assertEquals(check location.latitude, 5.45d);
 }
 
-@test:Config {dependsOn: [testPopulateTables]}
+@test:Config {dependsOn: [testSignUp]}
 function testPostRestrictedArea() returns error? {
+    string jwt = check getUserJwt();
+
     http:Response res = check testClient->post("/restricted-area", {
         "name": "general-hospital", 
         "numOfPoints": 5, 
@@ -212,7 +215,18 @@ function testPostRestrictedArea() returns error? {
                     {lat: 6.868156, long: 79.932423},
                     {lat: 6.864066, long: 79.925042},
                     {lat: 6.875996, long: 79.911824}]
-    });
+    }, {"Authorization": "Bearer " + jwt});
+    test:assertEquals(res.statusCode, 403);
+
+    res = check testClient->post("/restricted-area", {
+        "name": "general-hospital", 
+        "numOfPoints": 5, 
+        "points": [{lat: 6.876678, long: 79.920579},
+                    {lat: 6.874974, long: 79.929333},
+                    {lat: 6.868156, long: 79.932423},
+                    {lat: 6.864066, long: 79.925042},
+                    {lat: 6.875996, long: 79.911824}]
+    }, {"Authorization": "Bearer " + adminJwt});
     test:assertEquals(res.statusCode, 200);
     res = check testClient->post("/restricted-area", {
         "name": "port-city", 
@@ -223,13 +237,20 @@ function testPostRestrictedArea() returns error? {
                     {lat: 6.923543, long: 79.841271},
                     {lat: 6.924054, long: 79.825993},
                     {lat: 6.939561, long: 79.819470}]
-    });
+    }, {"Authorization": "Bearer " + adminJwt});
     test:assertEquals(res.statusCode, 200);    
 }
 
-@test:Config {dependsOn: [testPopulateTables, testPostRestrictedArea]}
+@test:Config {dependsOn: [testPostRestrictedArea]}
 function testGetRestrictedAreas() returns error? {
-    http:Response res = check testClient->get("/restricted-areas");
+    http:Response loginRes = check testClient->post("/login", {
+        username: "samankumara007",
+        password: "1qa2ws3edRF"
+    });
+    test:assertEquals(loginRes.statusCode, 200);
+    string jwt = check (check loginRes.getJsonPayload()).jwt;
+
+    http:Response res = check testClient->get("/restricted-areas", {"Authorization": "Bearer " + jwt});
     test:assertEquals(res.statusCode, 200);
 
     json[] restrictedAreas = <json[]> check res.getJsonPayload();
@@ -240,14 +261,19 @@ function testGetRestrictedAreas() returns error? {
     test:assertEquals(check restrictedArea.points, "[{\"lat\":6.947229,\"long\":79.820157},{\"lat\":6.953875,\"long\":79.835606},{\"lat\":6.945014,\"long\":79.846592},{\"lat\":6.923543,\"long\":79.841271},{\"lat\":6.924054,\"long\":79.825993},{\"lat\":6.939561,\"long\":79.81947}]");
 }
 
-@test:Config {dependsOn: [testPopulateTables, testPostRestrictedArea, testGetRestrictedAreas]}
+@test:Config {dependsOn: [testPostRestrictedArea]}
 function testRemoveRestrictedArea() returns error? {
     http:Response res = check testClient->post("/delete-restricted-area", {
         "id": 1
-    });
+    }, {"Authorization": "Bearer " + adminJwt});
     test:assertEquals(res.statusCode, 200);
 
-    res = check testClient->get("/restricted-areas");
+    res = check testClient->post("/delete-restricted-area", {
+        "id": 1
+    }, {"Authorization": "Bearer " + "invalid-jwt"});
+    test:assertEquals(res.statusCode, 401);
+
+    res = check testClient->get("/restricted-areas", {"Authorization": "Bearer " + adminJwt});
     test:assertEquals(res.statusCode, 200);
     json[] restrictedAreas = <json[]> check res.getJsonPayload();
     test:assertEquals(restrictedAreas.length(), 1);
@@ -259,13 +285,16 @@ function testRemoveRestrictedArea() returns error? {
 
 @test:Config {dependsOn: [testPostRestrictedArea]}
 function testRestrictedArea() returns error? {
+    string jwt = check getUserJwt();
+
     http:Response res = check testClient->post("/object-data", {
         "id" : "004",
         "latitude" : "6.9351051",
         "longitude" : "79.8398552"
-    });
-    test:assertEquals(res.statusCode, 200);    
-    res = check testClient->get("/get-object-locations");
+    }, {"Authorization": "Bearer " + jwt});
+    test:assertEquals(res.statusCode, 200); 
+
+    res = check testClient->get("/get-object-locations", {"Authorization": "Bearer " + jwt});
     test:assertEquals(res.statusCode, 200);
 
     json[] locations = <json[]> check res.getJsonPayload();
@@ -276,6 +305,15 @@ function testRestrictedArea() returns error? {
         }
     }
     test:assertEquals(true, false);
+}
+
+function getUserJwt() returns string|error {
+    http:Response loginRes = check testClient->post("/login", {
+        username: "samankumara007",
+        password: "1qa2ws3edRF"
+    });
+    test:assertEquals(loginRes.statusCode, 200);
+    return <string> check (check loginRes.getJsonPayload()).jwt;
 }
 
 @test:AfterSuite
